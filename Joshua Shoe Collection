@@ -1,0 +1,373 @@
+import pandas as pd
+import ipywidgets as widgets
+from IPython.display import display, clear_output, HTML
+import os
+import base64
+
+#Excel file containing the shoe collection
+excel_file = "Shoe Collection.xlsx"
+df = pd.read_excel(excel_file)
+
+#Folder containing the images of shoes
+image_folder = "Shoe Pics"
+
+
+class ShoeCollectionManager:
+    """Manages the Shoe Collection and gives the Landing Page Interface."""
+    def __init__(self, dataframe):
+        self.df = dataframe
+        self.filtered_df = pd.DataFrame()  #Initialise with empty DataFrame
+
+        #Widgets for landing page
+        self.title_label = widgets.Label(
+            value="Joshua's Shoe Collection Manager",
+            style={"font_weight": "bold", "font_size": "20px"}
+        )
+        self.filter_dropdown = widgets.Dropdown(
+            options=["Select View", "Full Collection", "Nike", "Adidas", "New Balance", "Formal"],
+            description="View:",
+            value="Select View",
+        )
+        self.secondary_filter_dropdown = widgets.Dropdown(
+            options=["All", "Nike", "Adidas", "New Balance", "Formal", "Black", "Onyx", "White", "Grey", "Blue", "Brown"],
+            description="Filter:",
+            value="All",
+        )
+        self.nike_tertiary_filter = widgets.Dropdown(
+            options=["All", "Size: 11", "Size: 9", "Black", "Blue", "White"],
+            description="Nike Filter:",
+            value="All",
+        )
+        self.adidas_tertiary_filter = widgets.Dropdown(
+            options=["All", "Size: 11.5", "Size: 10", "Size: 9.5", "Onyx", "Grey"],
+            description="Adidas Filter:",
+            value="All",
+        )
+        self.newbalance_tertiary_filter = widgets.Dropdown(
+            options=["All", "Size: 10", "Size: 9.5"],
+            description="New Balance Filter",
+            value="All",
+        )
+        self.formal_tertiary_filter = widgets.Dropdown(
+            options=["All", "Size: 11", "Size: 10", "Black", "Brown"],
+            description="Formal Filter:",
+            value="All",
+        )
+
+        #Hiding the tertiary filters initially
+        self.secondary_filter_dropdown.layout.display = "none"
+        self.nike_tertiary_filter.layout.display = "none"
+        self.adidas_tertiary_filter.layout.display = "none"
+        self.newbalance_tertiary_filter.layout.display = "none"
+        self.formal_tertiary_filter.layout.display = "none"
+
+        self.output = widgets.Output()
+
+        #event handlers
+        self.filter_dropdown.observe(self.on_filter_change, names="value")
+        self.secondary_filter_dropdown.observe(self.on_secondary_filter_change, names="value")
+        self.nike_tertiary_filter.observe(self.on_tertiary_filter_change, names="value")
+        self.adidas_tertiary_filter.observe(self.on_tertiary_filter_change, names="value")
+        self.newbalance_tertiary_filter.observe(self.on_tertiary_filter_change, names="value")
+        self.formal_tertiary_filter.observe(self.on_tertiary_filter_change, names="value")
+        
+    def display_collection(self):
+        """Display shoe collection based on the selected filters."""   
+        with self.output:
+            clear_output(wait=True)
+            if self.filtered_df.empty:
+                display("No collection selected; Please choose an option to view the shoes!")
+            else:
+                rows = []
+                for _, row in self.filtered_df.iterrows():
+                    model = row['Model']
+                    img_path = os.path.join(image_folder, f"{model}.png") #Path to the image file
+                    if os.path.exists(img_path):
+                        with open(img_path, 'rb') as img_file:
+                            img_data = img_file.read()
+                            img_base64 = base64.b64encode(img_data).decode('utf-8')
+                            img_tag = f"<img src='data:image/png;base64,{img_base64}' alt='Shoe Image' style='width: 100px; height: 100px; margin-right: 10px;'>"
+                    else:
+                        img_tag = "<span style='color: red;'>Image not found</span>"
+
+                    rows.append(f"""
+                        <div style='display: flex; align-items: center; margin-bottom: 10px;'>
+                            {img_tag}
+                            <span>{row['Brand']} - {row['Model']} (Size: {row['Size']}, Color: {row['Color']})</span>
+                        </div>
+                    """)#Display the shoe details
+                display(HTML("".join(rows)))
+
+    def apply_filters(self):
+        """Apply primary, secondary, and tertiary filters to display the appropriate subset."""
+        view_option = self.filter_dropdown.value
+        secondary_filter = self.secondary_filter_dropdown.value
+        nike_tertiary_filter = self.nike_tertiary_filter.value
+        adidas_tertiary_filter = self.adidas_tertiary_filter.value
+        newbalance_tertiary_filter = self.newbalance_tertiary_filter.value
+        formal_tertiary_filter = self.formal_tertiary_filter.value
+
+        #apply primary filter
+        if view_option == "Full Collection":
+            self.filtered_df = self.df
+        elif view_option in self.df["Brand"].unique():
+            self.filtered_df = self.df[self.df["Brand"] == view_option]
+        elif view_option == "Formal":
+            self.filtered_df = self.df[self.df["Category"] == "Formal"]
+        else:
+            self.filtered_df = pd.DataFrame()  #reset to empty if no valid filter is selected
+
+        #apply the secondary filter if "Full Collection" is selected
+        if view_option == "Full Collection" and secondary_filter != "All":
+            if secondary_filter in self.df["Brand"].unique():
+                self.filtered_df = self.filtered_df[self.filtered_df["Brand"] == secondary_filter]
+            elif secondary_filter in self.df["Color"].unique():
+                self.filtered_df = self.filtered_df[self.filtered_df["Color"] == secondary_filter]
+            elif secondary_filter == "Formal":
+                self.filtered_df = self.filtered_df[self.filtered_df["Category"] == "Formal"]
+
+        #show and apply the Nike tertiary filter
+        if view_option == "Nike" or (view_option == "Full Collection" and secondary_filter == "Nike"):
+            self.nike_tertiary_filter.layout.display = ""  #Show Nike filter
+            if nike_tertiary_filter != "All":
+                if "Size:" in nike_tertiary_filter:
+                    size = float(nike_tertiary_filter.split(":")[1].strip())
+                    self.filtered_df = self.filtered_df[self.filtered_df["Size"] == size]
+                elif nike_tertiary_filter in self.df["Color"].unique():
+                    self.filtered_df = self.filtered_df[self.filtered_df["Color"] == nike_tertiary_filter]
+        else:
+            self.nike_tertiary_filter.layout.display = "none"  #Hide Nike filter
+            self.nike_tertiary_filter.value = "All"
+
+        #show and apply the Adidas tertiary filter
+        if view_option == "Adidas" or (view_option == "Full Collection" and secondary_filter == "Adidas"):
+            self.adidas_tertiary_filter.layout.display = ""  #Show Adidas filter
+            if adidas_tertiary_filter != "All":
+                if "Size:" in adidas_tertiary_filter:
+                    size = float(adidas_tertiary_filter.split(":")[1].strip())
+                    self.filtered_df = self.filtered_df[self.filtered_df["Size"] == size]
+                elif adidas_tertiary_filter in self.df["Color"].unique():
+                    self.filtered_df = self.filtered_df[self.filtered_df["Color"] == adidas_tertiary_filter]
+        else:
+            self.adidas_tertiary_filter.layout.display = "none"  #Hide Adidas filter
+            self.adidas_tertiary_filter.value = "All"
+        
+        #Show and apply New Balance tertiary filter
+        if view_option == "New Balance" or (view_option == "Full Collection" and secondary_filter == "New Balance"):
+            self.newbalance_tertiary_filter.layout.display = ""  #Show New Balance filter
+            if newbalance_tertiary_filter != "All":
+                if "Size:" in newbalance_tertiary_filter:
+                    size = float(newbalance_tertiary_filter.split(":")[1].strip())
+                    self.filtered_df = self.filtered_df[self.filtered_df["Size"] == size]
+                elif newbalance_tertiary_filter in self.df["Color"].unique():
+                    self.filtered_df = self.filtered_df[self.filtered_df["Color"] == newbalance_tertiary_filter]
+        else:
+            self.newbalance_tertiary_filter.layout.display = "none"  #Hide New balance filter
+            self.newbalance_tertiary_filter.value = "All"
+
+    #Show and apply Formal tertiary filter
+        if view_option == "Formal" or (view_option == "Full Collection" and secondary_filter == "Formal"):
+            self.formal_tertiary_filter.layout.display = ""  #Show Formal filter
+            if formal_tertiary_filter != "All":
+                if "Size:" in formal_tertiary_filter:
+                    size = float(formal_tertiary_filter.split(":")[1].strip())
+                    self.filtered_df = self.filtered_df[self.filtered_df["Size"] == size]
+                elif formal_tertiary_filter in self.df["Color"].unique():
+                    self.filtered_df = self.filtered_df[self.filtered_df["Color"] == formal_tertiary_filter]
+        else:
+            self.formal_tertiary_filter.layout.display = "none"  #Hide Formal filter
+            self.formal_tertiary_filter.value = "All"
+
+
+    def on_filter_change(self, change):
+        """Handles primary dropdown selection changes"""
+        if self.filter_dropdown.value == "Full Collection":
+            self.secondary_filter_dropdown.layout.display = ""  #Show secondary filter
+        else:
+            self.secondary_filter_dropdown.layout.display = "none"  #Hide secondary filter
+            self.secondary_filter_dropdown.value = "All"  #Reset secondary filter
+
+        self.apply_filters()
+        self.display_collection()
+
+    def on_secondary_filter_change(self, change):
+        """Handles secondary dropdown selection changes"""
+        self.apply_filters()
+        self.display_collection()
+
+    def on_tertiary_filter_change(self, change):
+        """Handles tertiary dropdown selection changes"""
+        self.apply_filters()
+        self.display_collection()
+
+    def display(self):
+        """Displays the landing page interface"""
+        display(widgets.VBox([
+            self.title_label,
+            self.filter_dropdown,
+            self.secondary_filter_dropdown,
+            self.nike_tertiary_filter,
+            self.adidas_tertiary_filter,
+            self.newbalance_tertiary_filter,
+            self.formal_tertiary_filter,
+            self.output
+        ]))
+        with self.output:
+            print("Welcome to your Shoe Collection!\nPlease select what you would like to see!")
+
+class ShoeDetailEditor:
+    def __init__(self, dataframe):
+        self.df = dataframe
+
+        #Dropdown to select shoe
+        self.shoe_dropdown = widgets.Dropdown(
+            options=self.get_shoe_options(),
+            description="Select Shoe:",
+            value=None
+        )
+        
+        #Text fields for size, color, and category
+        self.size_input = widgets.FloatText(
+            description="Size:",
+            value=0.0
+        )
+        self.color_text = widgets.Text(
+            description="Color:",
+            value=""
+        )
+        self.category_text = widgets.Text(
+            description="Category:",
+            value=""
+        )
+        
+        #Update button
+        self.update_button = widgets.Button(
+            description="Update Shoe",
+            button_style="Success"
+        )
+        
+        self.output = widgets.Output()
+        
+        #Event handlers
+        self.update_button.on_click(self.update_shoe)
+        self.shoe_dropdown.observe(self.populate_fields, names="value")
+        
+        #Display interface
+        self.display_editor()
+
+    def get_shoe_options(self):
+        """Generate dropdown options for shoes"""
+        return [(f"{row['Brand']} - {row['Model']} - {row['Color']} (Size: {row['Size']})", index) 
+                for index, row in self.df.iterrows()]
+
+    def populate_fields(self, change):
+        """Populate text fields when a shoe is selected"""
+        if self.shoe_dropdown.value is not None:
+            selected_shoe = self.df.loc[self.shoe_dropdown.value]
+            self.size_input.value = selected_shoe['Size']
+            self.color_text.value = selected_shoe['Color']
+            self.category_text.value = selected_shoe['Category']
+
+    def update_shoe(self, _):
+        """Update shoe details in the DataFrame"""
+        with self.output:
+            clear_output(wait=True)
+            if self.shoe_dropdown.value is not None:
+                index = self.shoe_dropdown.value
+                self.df.at[index, 'Size'] = self.size_input.value
+                self.df.at[index, 'Color'] = self.color_text.value
+                self.df.at[index, 'Category'] = self.category_text.value
+                display(f"Updated shoe at index {index}.")
+                display(HTML(self.df.to_html(index=False)))
+            else:
+                display("Please select a shoe to update!")
+
+    def display_editor(self):
+        """Display the editor interface"""
+        display(widgets.VBox([
+            self.shoe_dropdown,
+            self.size_input,
+            self.color_text,
+            self.category_text,
+            self.update_button,
+            self.output
+        ]))
+
+class ShoeAdder:
+    def __init__(self, dataframe, manager):
+        self.df = dataframe
+        self.manager = manager  #Reference to the ShoeCollectionManager
+
+        #Input widgets for adding a new shoe
+        self.brand_input = widgets.Text(description="Brand:")
+        self.model_input = widgets.Text(description="Model:")
+        self.size_input = widgets.FloatText(description="Size:")
+        self.color_input = widgets.Text(description="Color:")
+        self.category_input = widgets.Text(description="Category:")
+        self.image_input = widgets.Text(description="Image Path:")
+
+        #Add button
+        self.add_button = widgets.Button(
+            description="Add Shoe",
+            button_style="Success"
+        )
+
+        self.output = widgets.Output()
+
+        #Event handler
+        self.add_button.on_click(self.add_shoe)
+
+        # Display addder UI
+        self.display_adder()
+
+    def add_shoe(self, _):
+        """Adds a new shoe to the collection"""
+        with self.output:
+            clear_output(wait=True)
+            new_shoe = {
+                'Brand': self.brand_input.value,
+                'Model': self.model_input.value,
+                'Size': self.size_input.value,
+                'Color': self.color_input.value,
+                'Category': self.category_input.value
+            }
+
+            #Save the image file to the image folder
+            img_path = os.path.join(image_folder, f"{new_shoe['Model']}.png")
+            if self.image_input.value:
+                try:
+                    #Copy the image to the Shoe Pics folder
+                    with open(self.image_input.value, 'rb') as src:
+                        with open(img_path, 'wb') as dst:
+                            dst.write(src.read())
+                    display(f"Image saved to {img_path}.")
+                except Exception as e:
+                    display(f"Error saving image: {e}")
+
+            #Append the new shoe to the DataFrame
+            self.df = pd.concat([self.df, pd.DataFrame([new_shoe])], ignore_index=True)
+            self.manager.df = self.df  #Update the manager's main DataFrame
+            self.manager.apply_filters()  #Refresh filters in ShoeCollectionManager
+            self.manager.display_collection()  #Refresh displayed collection
+
+            display(f"Added new shoe: {new_shoe}")
+
+    def display_adder(self):
+        """Display the shoe adder interface"""
+        display(widgets.VBox([
+            self.brand_input,
+            self.model_input,
+            self.size_input,
+            self.color_input,
+            self.category_input,
+            self.image_input,
+            self.add_button,
+            self.output
+        ]))
+
+manager = ShoeCollectionManager(df)#Instantiate the Shoe Collection Manager
+manager.display()
+
+adder = ShoeAdder(manager.df, manager)#Instantiate the Shoe Adder
+
+editor = ShoeDetailEditor(manager.df)#Instantiate the Shoe Detail Editor
