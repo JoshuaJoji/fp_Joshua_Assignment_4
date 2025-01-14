@@ -1,8 +1,10 @@
+#Necessary Libraries
 import pandas as pd
 import ipywidgets as widgets
 from IPython.display import display, clear_output, HTML
 import os
 import base64
+import plotly.express as px
 
 #Excel file containing the shoe collection
 excel_file = "Shoe Collection.xlsx"
@@ -11,6 +13,10 @@ df = pd.read_excel(excel_file)
 #Folder containing the images of shoes
 image_folder = "Shoe Pics"
 
+# ------------------------------------------------------------------------------------------------------
+# CLASS: ShoeCollectionManager
+# This class manages the shoe collection and provides the landing page interface with filter options.
+# ------------------------------------------------------------------------------------------------------
 
 class ShoeCollectionManager:
     """Manages the Shoe Collection and gives the Landing Page Interface."""
@@ -75,19 +81,19 @@ class ShoeCollectionManager:
         """Display shoe collection based on the selected filters."""   
         with self.output:
             clear_output(wait=True)
-            if self.filtered_df.empty:
+            if self.filtered_df.empty: #If no collection filtered, display default message
                 display("No collection selected; Please choose an option to view the shoes!")
             else:
                 rows = []
-                for _, row in self.filtered_df.iterrows():
+                for _, row in self.filtered_df.iterrows(): #Loop through filtered shoes and display their details with images
                     model = row['Model']
                     img_path = os.path.join(image_folder, f"{model}.png") #Path to the image file
-                    if os.path.exists(img_path):
+                    if os.path.exists(img_path): #Encode image in base64 for displaying inline
                         with open(img_path, 'rb') as img_file:
                             img_data = img_file.read()
                             img_base64 = base64.b64encode(img_data).decode('utf-8')
                             img_tag = f"<img src='data:image/png;base64,{img_base64}' alt='Shoe Image' style='width: 100px; height: 100px; margin-right: 10px;'>"
-                    else:
+                    else: #Fallback for missing images
                         img_tag = "<span style='color: red;'>Image not found</span>"
 
                     rows.append(f"""
@@ -215,6 +221,11 @@ class ShoeCollectionManager:
         with self.output:
             print("Welcome to your Shoe Collection!\nPlease select what you would like to see!")
 
+# ------------------------------------------------------------------------------------------------------
+# CLASS: ShoeDetailEditor
+# This class provides an interface to edit details of existing shoes in the collection.
+# ------------------------------------------------------------------------------------------------------
+
 class ShoeDetailEditor:
     def __init__(self, dataframe):
         self.df = dataframe
@@ -292,6 +303,10 @@ class ShoeDetailEditor:
             self.update_button,
             self.output
         ]))
+# ------------------------------------------------------------------------------------------------------
+# CLASS: ShoeAdder
+# This class provides an interface for adding new shoes to the collection.
+# ------------------------------------------------------------------------------------------------------
 
 class ShoeAdder:
     def __init__(self, dataframe, manager):
@@ -365,8 +380,63 @@ class ShoeAdder:
             self.output
         ]))
 
+# ------------------------------------------------------------------------------------------------------
+# CLASS: ShoeDashboard
+# This class provides a visual analytics interface for the shoe collection.
+# ------------------------------------------------------------------------------------------------------
+
+class ShoeDashboard:
+    def __init__(self, dataframe):
+        self.df = dataframe
+
+        #dropdown forselecting visualisations
+        self.chart_dropdown = widgets.Dropdown(
+            options=["Select", "Pie Chart: Shoe Categories", "Pivot Table: Total Number of Shoes by Brand"],
+            description="Visualize:"
+        )
+        self.output = widgets.Output()
+
+        self.chart_dropdown.observe(self.on_selection_change, names="value")
+
+    def on_selection_change(self, change):
+        """Handles dropdown selection changes."""
+        with self.output:
+            clear_output(wait=True)
+            if self.chart_dropdown.value == "Pie Chart: Shoe Categories":
+                self.show_category_distribution()
+            elif self.chart_dropdown.value == "Pivot Table: Total Number of Shoes by Brand":
+                self.show_pivot_table()
+
+    def show_category_distribution(self):
+        """Pie chart of shoes by category."""
+        category_counts = self.df['Category'].value_counts().reset_index()
+        category_counts.columns = ['Category', 'Count']
+
+        #Plotly pie chart
+        fig = px.pie(category_counts, values='Count', names='Category',
+                     title="Shoe Categories",
+                     color_discrete_sequence=px.colors.qualitative.Pastel)
+
+        fig.show()
+
+    def show_pivot_table(self):
+        """Pivot table showing the number of shoes per brand."""
+        #pivot table counting the number of shoes per brand
+        pivot = self.df.pivot_table(values='Model', index='Brand', aggfunc='count')
+        
+        #display as a HTML table
+        display(HTML(pivot.to_html()))
+
+
+    def display_dashboard(self):
+        """Display the dashboard interface."""
+        display(widgets.VBox([self.chart_dropdown, self.output]))
+
 manager = ShoeCollectionManager(df)#Instantiate the Shoe Collection Manager
 manager.display()
+
+dashboard = ShoeDashboard(df)#Instantiate the Shoe Dashboard
+dashboard.display_dashboard()
 
 adder = ShoeAdder(manager.df, manager)#Instantiate the Shoe Adder
 
